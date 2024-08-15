@@ -39,11 +39,11 @@ cz_changeup = "cz_changeup.cz_changeup:ChangeupCz"
 packages = ["src/cz_changeup"]
 
 [tool.commitizen]
-name = "cz_changeup"
 version_provider = "pep621"
 update_changelog_on_bump = true
+tag_format = "v$version"
 changelog_incremental = false
-
+name = "cz_changeup"
 # cz-changeup specific settings
 changeup_repo_base_url = "https://github.com/kmnhan/cz-changeup"
 changeup_show_body = true
