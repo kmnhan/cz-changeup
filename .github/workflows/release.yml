@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    branches: [ "main" ]
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release
+    environment:
+      name: pypi
+      url: https://pypi.org/p/cz-changeup
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run commitizen
+        if: ${{ !startsWith(github.event.head_commit.message, 'bump:') }}
+        id: cz
+        uses: commitizen-tools/commitizen-action@master
+        with:
+          extra_requirements : "."
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          changelog_increment_filename: body.md
+
+      - name: Build package distributions
+        id: build
+        if: env.REVISION != env.PREVIOUS_REVISION
+        run: |
+          pipx run build
+
+      - name: Publish package distributions to PyPI
+        id: pypi-publish
+        if: env.REVISION != env.PREVIOUS_REVISION
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+
+      - name: Publish package distributions to GitHub Releases
+        id: github-release
+        if: env.REVISION != env.PREVIOUS_REVISION
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: "body.md"
+          tag_name: v${{ steps.cz.outputs.version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
