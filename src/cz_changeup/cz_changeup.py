@@ -23,7 +23,9 @@ class ChangeupCz(ConventionalCommitsCz):
 
         if self.show_body and commit.body:
             msg += f"\n\n{' ' * self.body_indent}"
-            body = commit.body.replace("\n", "\n" + (" " * self.body_indent))
+            body = ("\n\n" + (" " * self.body_indent)).join(
+                [s.strip() for s in str(commit.body).split("\n") if s]
+            )
             msg += f"{body}"
 
         parsed_message["message"] = msg
