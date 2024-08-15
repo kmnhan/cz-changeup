@@ -27,7 +27,7 @@ classifiers = [
 dependencies = ["commitizen>=3.0.0"]
 
 [project.urls]
-Changelog = "https://github.com/kmnhan/cz-changeup#changelog"
+Changelog = "https://github.com/kmnhan/cz-changeup/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/kmnhan/cz-changeup#readme"
 Issues = "https://github.com/kmnhan/cz-changeup/issues"
 Source = "https://github.com/kmnhan/cz-changeup"
@@ -42,4 +42,9 @@ packages = ["src/cz_changeup"]
 name = "cz_changeup"
 version_provider = "pep621"
 update_changelog_on_bump = true
-changelog_incremental = true
+changelog_incremental = false
+
+# cz-changeup specific settings
+changeup_repo_base_url = "https://github.com/kmnhan/cz-changeup"
+changeup_show_body = true
+changeup_body_indent = 2
