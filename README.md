@@ -1,4 +1,6 @@
 # cz-changeup
+[![PyPI - Version](https://img.shields.io/pypi/v/cz-changeup)](https://pypi.org/project/cz-changeup)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cz-changeup)](https://pypi.org/project/cz-changeup)
 
 This plugin is a version of
 [Commitizen](https://commitizen-tools.github.io/commitizen/)'s default conventional
