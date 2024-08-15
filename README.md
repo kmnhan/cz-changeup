@@ -7,7 +7,7 @@ style with a more informative changelog format.
 ## Installation
 
 ```bash
-    pip install cz-changeup
+pip install cz-changeup
 ```
 
 ## Configuration
