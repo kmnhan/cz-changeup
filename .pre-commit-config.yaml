@@ -41,10 +41,12 @@ repos:
       # Run the formatter.
       - id: ruff-format
 
-  # # Commitizen
-  # - repo: https://github.com/commitizen-tools/commitizen
-  #   rev: v3.28.0
-  #   hooks:
-  #     - id: commitizen
-  #     - id: commitizen-branch
-  #       stages: [push]
+  # Commitizen
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.28.0
+    hooks:
+      - id: commitizen
+        additional_dependencies: [ cz-changeup ]
+      - id: commitizen-branch
+        additional_dependencies: [ cz-changeup ]
+        stages: [push]
