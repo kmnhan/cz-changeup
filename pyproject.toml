@@ -24,7 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = ["commitizen>=3.0.0"]
+dependencies = ["commitizen>=3.0.0,<4.0.0"]
 
 [project.urls]
 Changelog = "https://github.com/kmnhan/cz-changeup/blob/main/CHANGELOG.md"
@@ -44,7 +44,14 @@ update_changelog_on_bump = true
 tag_format = "v$version"
 changelog_incremental = false
 name = "cz_changeup"
+
 # cz-changeup specific settings
 changeup_repo_base_url = "https://github.com/kmnhan/cz-changeup"
+changeup_show_hash = true
 changeup_show_body = true
 changeup_body_indent = 2
+changeup_link_issues = true
+changeup_scope_bold = true
+changeup_scope_prefix = "[**"
+changeup_scope_suffix = "**]"
+changeup_scope_separator = " "
