@@ -2,7 +2,7 @@
 
 ### Feat
 
-- [**link**] Improve issue linking in commit messages, closes [#3](https://github.com/kmnhan/cz-changeup/issues/3) ([9758f43](https://github.com/kmnhan/cz-changeup/commit/9758f43ca7e39c46eb77e5333223998f0deb3f9a))
+- **link:** Improve issue linking in commit messages, closes [#3](https://github.com/kmnhan/cz-changeup/issues/3) ([9758f43](https://github.com/kmnhan/cz-changeup/commit/9758f43ca7e39c46eb77e5333223998f0deb3f9a))
 
   Now supports linking multiple issues by separating them with spaces. Each issue is now properly linked to its corresponding URL on the base URL provided.
 
@@ -16,7 +16,7 @@
 
 ### Fix
 
-- [**scope**] remove trailing whitespace in body ([e7383d9](https://github.com/kmnhan/cz-changeup/commit/e7383d924051cc4b0eb0f4d7a61da32941d200d9))
+- **scope:** remove trailing whitespace in body ([e7383d9](https://github.com/kmnhan/cz-changeup/commit/e7383d924051cc4b0eb0f4d7a61da32941d200d9))
 
 ## v0.1.1 (2024-08-15)
 
