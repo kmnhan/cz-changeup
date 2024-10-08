@@ -49,4 +49,4 @@ repos:
         additional_dependencies: [ cz-changeup ]
       - id: commitizen-branch
         additional_dependencies: [ cz-changeup ]
-        stages: [Nonepre-pushNone]
+        stages: [pre-push]
