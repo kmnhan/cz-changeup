@@ -18,16 +18,21 @@ _issue_keywords = (
     "resolved",
 )
 _issue_pattern = re.compile(
-    r"(\b(?:" + "|".join(_issue_keywords) + r")\s+#(\d+))", re.IGNORECASE
+    r"(\b(?:" + "|".join(_issue_keywords) + r")\s+(#\d+(\s+#\d+)*)\b)", re.IGNORECASE
 )
 
 
 def linkify_issues(message: str, base_url: str) -> str:
     def _replace_issue_with_link(match):
         keyword = match.group(1)
-        issue_number = match.group(2)
-        issue_link = f"[#{issue_number}]({base_url}/issues/{issue_number})"
-        return keyword.replace(f"#{issue_number}", issue_link)
+        issue_numbers = match.group(2).split()
+        issue_links = " ".join(
+            [
+                f"[{issue_number}]({base_url}/issues/{issue_number[1:]})"
+                for issue_number in issue_numbers
+            ]
+        )
+        return keyword.replace(match.group(2), issue_links)
 
     return _issue_pattern.sub(_replace_issue_with_link, message)
 
