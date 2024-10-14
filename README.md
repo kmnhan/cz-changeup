@@ -1,6 +1,9 @@
 # cz-changeup
-[![PyPI - Version](https://img.shields.io/pypi/v/cz-changeup)](https://pypi.org/project/cz-changeup)
+
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cz-changeup)](https://pypi.org/project/cz-changeup)
+[![PyPI - Version](https://img.shields.io/pypi/v/cz-changeup)](https://pypi.org/project/cz-changeup)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/cz-changeup)](https://anaconda.org/conda-forge/cz-changeup)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 This plugin is a version of
 [Commitizen](https://commitizen-tools.github.io/commitizen/)'s default conventional
@@ -8,8 +11,16 @@ style that provides more flexibility in the changelog format.
 
 ## Installation
 
+With pip:
+
 ```bash
 pip install cz-changeup
+```
+
+With conda:
+
+```bash
+conda install -c conda-forge cz-changeup
 ```
 
 ## Configuration
