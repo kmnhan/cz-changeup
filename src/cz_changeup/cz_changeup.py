@@ -46,6 +46,7 @@ class ChangeupCz(ConventionalCommitsCz):
     repo_base_url: str = conf.settings.get("changeup_repo_base_url", "").strip(" /")
     show_hash: bool = conf.settings.get("changeup_show_hash", True)
     show_body: bool = conf.settings.get("changeup_show_body", True)
+    hide_breaking: bool = conf.settings.get("changeup_hide_breaking", True)
     body_indent: int = conf.settings.get("changeup_body_indent", 2)
 
     link_issues: bool = conf.settings.get("changeup_link_issues", True)
@@ -66,9 +67,13 @@ class ChangeupCz(ConventionalCommitsCz):
             )
 
         if self.show_body and commit.body:
+            body = str(commit.body)
+            if self.hide_breaking and "BREAKING CHANGE:" in body:
+                body = body.split("BREAKING CHANGE:")[0].strip()
+
             msg += f"\n\n{' ' * self.body_indent}"
             body = ("\n\n" + (" " * self.body_indent)).join(
-                [s.strip() for s in str(commit.body).split("\n") if s]
+                [s.strip() for s in body.split("\n") if s]
             )
             msg += f"{body}"
 
