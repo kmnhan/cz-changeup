@@ -1,3 +1,9 @@
+## v1.0.1 (2024-10-25)
+
+### Fix
+
+- properly handle breaking changes ([ef54285](https://github.com/kmnhan/cz-changeup/commit/ef5428575e24effa2c2fec8efccabef161274868))
+
 ## v1.0.0 (2024-10-25)
 
 ### BREAKING CHANGE
