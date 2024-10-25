@@ -46,6 +46,7 @@ class ChangeupCz(ConventionalCommitsCz):
     repo_base_url: str = conf.settings.get("changeup_repo_base_url", "").strip(" /")
     show_hash: bool = conf.settings.get("changeup_show_hash", True)
     show_body: bool = conf.settings.get("changeup_show_body", True)
+    show_hash_breaking: bool = conf.settings.get("changeup_show_hash_breaking", True)
     hide_breaking: bool = conf.settings.get("changeup_hide_breaking", True)
     body_indent: int = conf.settings.get("changeup_body_indent", 2)
 
@@ -61,21 +62,30 @@ class ChangeupCz(ConventionalCommitsCz):
         msg = str(parsed_message["message"])
         scope = parsed_message.get("scope")
 
-        if self.repo_base_url and self.show_hash:
+        in_breaking_section = (
+            parsed_message.get("change_type", None) == "BREAKING CHANGE"
+        )
+
+        add_hash: bool = (self.repo_base_url != "") and self.show_hash
+
+        if in_breaking_section:
+            msg = self.parse_body_indent(msg)
+
+            if not self.show_hash_breaking:
+                add_hash = False
+
+        if add_hash:
             msg = (
                 msg + f" ([{commit.rev[:7]}]({self.repo_base_url}/commit/{commit.rev}))"
             )
 
-        if self.show_body and commit.body:
+        if self.show_body and commit.body and not in_breaking_section:
             body = str(commit.body)
             if self.hide_breaking and "BREAKING CHANGE:" in body:
                 body = body.split("BREAKING CHANGE:")[0].strip()
 
-            msg += f"\n\n{' ' * self.body_indent}"
-            body = ("\n\n" + (" " * self.body_indent)).join(
-                [s.strip() for s in body.split("\n") if s]
-            )
-            msg += f"{body}"
+            if body:
+                msg += f"\n\n{' ' * self.body_indent}{self.parse_body_indent(body)}"
 
         if scope:
             scope = (
@@ -88,6 +98,11 @@ class ChangeupCz(ConventionalCommitsCz):
 
         parsed_message["message"] = msg
         return parsed_message
+
+    def parse_body_indent(self, body: str):
+        return ("\n\n" + (" " * self.body_indent)).join(
+            [s.strip() for s in body.split("\n") if s]
+        )
 
     @property
     def template_extras(self) -> dict[str, str]:
