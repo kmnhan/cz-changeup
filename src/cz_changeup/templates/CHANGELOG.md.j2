@@ -14,6 +14,9 @@
 {% elif change.message %}
 - {{ change.message }}
 {% endif %}
+{% if not loop.last %}
+
+{% endif %}
 {% endfor %}
 {% endfor %}
 {% endfor %}
