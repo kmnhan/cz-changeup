@@ -25,6 +25,9 @@ classifiers = [
 ]
 dependencies = ["commitizen>=3.0.0,<5.0.0"]
 
+[dependency-groups]
+dev = ["myst-parser>=3", "pytest>=8", "ruff"]
+
 [project.urls]
 Changelog = "https://github.com/kmnhan/cz-changeup/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/kmnhan/cz-changeup#readme"
