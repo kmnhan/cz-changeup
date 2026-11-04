@@ -1,3 +1,11 @@
+## v1.1.3 (2026-11-04)
+
+### Fix
+
+- **changelog:** preserve Markdown bodies and format coauthor credits (#27) ([e5374da](https://github.com/kmnhan/cz-changeup/commit/e5374da037f7796f8e0e5c05cf9c298f1ed2d70a))
+
+  Fixes invalid changelog entries from GitHub merges that add a separator before coauthor trailers. Formats coauthors as a short credit with names only and preserves paragraphs, lists, and code blocks in commit bodies.
+
 ## v1.1.2 (2024-12-18)
 
 ### Fix
