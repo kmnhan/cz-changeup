@@ -1,3 +1,11 @@
+## v1.1.4 (2026-11-04)
+
+### Fix
+
+- **changelog:** link coauthors and test Python 3.9 through 3.15 (#28) ([1989ec4](https://github.com/kmnhan/cz-changeup/commit/1989ec467e1cc5d9555cf528990261efcb260ac7))
+
+  Links coauthor names to GitHub profiles inferred from noreply addresses or found in public commit records.
+
 ## v1.1.3 (2026-11-04)
 
 ### Fix
