@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 __all__ = ["ChangeupCz"]
 
 import re
@@ -23,6 +25,56 @@ _ISSUE_PATTERN = re.compile(
 _ISSUE_PATTERN_EXTERNAL = re.compile(
     r"(?P<owner>[\w-]+)/(?P<repo>[\w-]+)/#(?P<issue_number>\d+)"
 )
+_COAUTHOR_TRAILER = re.compile(
+    r"Co-authored-by:[ \t]+(?P<name>[^<>\r\n]+?)[ \t]*<[^<>\r\n]+>[ \t]*",
+    re.IGNORECASE,
+)
+_COMMIT_TRAILER = re.compile(r"[A-Za-z][A-Za-z0-9-]*:[ \t]+\S.*")
+
+
+def _split_coauthors(body: str) -> tuple[str, str]:
+    lines = body.splitlines()
+    end = len(lines)
+    names = []
+    remaining_lines = []
+    while end:
+        line = lines[end - 1]
+        if not line.strip():
+            remaining_lines.append(line)
+            end -= 1
+            continue
+        trailer = _COAUTHOR_TRAILER.fullmatch(line)
+        if trailer is None:
+            if not _COMMIT_TRAILER.fullmatch(line):
+                break
+            remaining_lines.append(line)
+        else:
+            names.append(trailer["name"].strip())
+        end -= 1
+
+    if not names:
+        return body, ""
+
+    # GitHub separates its coauthor trailers from the description with a rule.
+    if (
+        end
+        and re.fullmatch(r"-{3,}", lines[end - 1])
+        and (end == 1 or not lines[end - 2].strip())
+    ):
+        end -= 1
+
+    names.reverse()
+    authors = (
+        names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    )
+    description = "\n".join(lines[:end]).rstrip("\n")
+    if remaining_lines:
+        description = "\n\n".join(
+            part
+            for part in (description, "\n".join(reversed(remaining_lines)).strip("\n"))
+            if part
+        )
+    return description, f"Co-authored by {authors}."
 
 
 def linkify_issues(message: str, base_url: str) -> str:
@@ -113,7 +165,10 @@ class ChangeupCz(ConventionalCommitsCz):
         add_hash: bool = (self.repo_base_url != "") and self.show_hash
 
         if in_breaking_section:
-            msg = self.parse_body_indent(msg)
+            description, credit = _split_coauthors(msg)
+            msg = self.parse_body_indent(
+                "\n\n".join(part for part in (description, credit) if part)
+            )
 
             if not self.show_hash_breaking:
                 add_hash = False
@@ -124,9 +179,10 @@ class ChangeupCz(ConventionalCommitsCz):
             )
 
         if self.show_body and commit.body and not in_breaking_section:
-            body = str(commit.body)
+            body, credit = _split_coauthors(str(commit.body))
             if self.hide_breaking and "BREAKING CHANGE:" in body:
                 body = body.split("BREAKING CHANGE:")[0].strip()
+            body = "\n\n".join(part for part in (body, credit) if part)
 
             if body:
                 msg += f"\n\n{' ' * self.body_indent}{self.parse_body_indent(body)}"
@@ -147,8 +203,10 @@ class ChangeupCz(ConventionalCommitsCz):
         return parsed_message
 
     def parse_body_indent(self, body: str):
-        return ("\n\n" + (" " * self.body_indent)).join(
-            [s.strip() for s in body.split("\n") if s]
+        lines = body.strip("\r\n").splitlines()
+        return "\n".join(
+            (" " * self.body_indent if index and line else "") + line
+            for index, line in enumerate(lines)
         )
 
     @property

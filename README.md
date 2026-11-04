@@ -32,6 +32,11 @@ Add to your `pyproject.toml`:
 name = "cz_changeup"
 ```
 
+Commit bodies keep their Markdown paragraphs, lists, and code blocks. Coauthor
+trailers become a short credit, such as `Co-authored by Alice Example and Bob
+Example.`, without email addresses. The separator that GitHub adds before these
+trailers is removed.
+
 The behavior of the plugin can be customized by providing the following options under `tool.commitizen`:
 
 | Option                          | Description                                                                                                                                      | Default |

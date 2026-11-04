@@ -1,0 +1,25 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - python: "3.9"
+            commitizen: "commitizen==3.0.0"
+          - python: "3.14"
+            commitizen: "commitizen>=4,<5"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv run --with '${{ matrix.commitizen }}' pytest
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
