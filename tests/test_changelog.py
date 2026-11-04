@@ -1,4 +1,9 @@
-from io import StringIO
+import json
+from http.client import IncompleteRead
+from io import BytesIO, StringIO
+from unittest.mock import Mock
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from commitizen import changelog, config, git
@@ -7,7 +12,22 @@ from docutils.core import publish_doctree
 from jinja2 import Environment
 from myst_parser.parsers.docutils_ import Parser
 
+import cz_changeup.cz_changeup as changeup_module
 from cz_changeup.cz_changeup import ChangeupCz
+
+
+@pytest.fixture(autouse=True)
+def _reset_github_lookup(monkeypatch):
+    changeup_module._lookup_github_username.cache_clear()
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.setattr(
+        changeup_module,
+        "urlopen",
+        Mock(side_effect=AssertionError("Tests must not make live GitHub requests")),
+    )
+    yield
+    changeup_module._lookup_github_username.cache_clear()
 
 
 @pytest.fixture
@@ -21,6 +41,7 @@ def plugin():
     plugin.body_indent = 2
     plugin.link_issues = True
     plugin.link_ext_issues = True
+    plugin.link_coauthors = False
     plugin.scope_prefix = "**"
     plugin.scope_suffix = ""
     plugin.scope_separator = ":** "
@@ -327,3 +348,218 @@ def test_commitizen_pipeline_renders_coauthor_credit(plugin, breaking):
     assert not list(document.findall(nodes.transition))
     if breaking:
         assert "Use the new API." in document.astext()
+
+
+@pytest.mark.parametrize(
+    ("email", "username"),
+    [
+        ("82874859+Younsik-phys@users.noreply.github.com", "Younsik-phys"),
+        ("Alice-Example@users.noreply.github.com", "Alice-Example"),
+        ("42+Alice@USERS.NOREPLY.GITHUB.COM", "Alice"),
+    ],
+)
+def test_coauthor_noreply_address_links_offline(plugin, email, username):
+    plugin.link_coauthors = True
+    parsed = build_message(plugin, f"Co-authored-by: Alice Example <{email}>")
+
+    assert parsed["message"] == (
+        "preserve changelog formatting\n\n  Co-authored by "
+        f"[Alice Example](https://github.com/{username})."
+    )
+    changeup_module.urlopen.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "username",
+    ["-alice", "alice-", "alice--example", "alice/other", "alice_name", "a" * 40],
+)
+def test_invalid_noreply_username_keeps_plain_credit(plugin, username):
+    plugin.link_coauthors = True
+    parsed = build_message(
+        plugin,
+        f"Co-authored-by: Alice Example <42+{username}@users.noreply.github.com>",
+    )
+
+    assert parsed["message"].endswith("Co-authored by Alice Example.")
+    changeup_module.urlopen.assert_not_called()
+
+
+def test_coauthor_link_escapes_markdown_name(plugin):
+    plugin.link_coauthors = True
+    name = r"Alice [Lab]\Team"
+    parsed = build_message(
+        plugin, f"Co-authored-by: {name} <42+alice@users.noreply.github.com>"
+    )
+    document = render_document(plugin, {"Fix": [parsed]})
+    reference = next(iter(document.findall(nodes.reference)))
+
+    assert reference["refuri"] == "https://github.com/alice"
+    assert reference.astext() == name
+    assert "users.noreply.github.com" not in document.astext()
+
+
+def test_coauthor_links_can_be_disabled(plugin, monkeypatch):
+    resolver = Mock(
+        side_effect=AssertionError("Disabled links must not resolve accounts")
+    )
+    monkeypatch.setattr(changeup_module, "_github_username", resolver)
+    parsed = build_message(
+        plugin,
+        "Co-authored-by: Alice Example <42+alice@users.noreply.github.com>\n"
+        "Co-authored-by: Bob Example <bob@example.com>",
+    )
+
+    assert parsed["message"].endswith("Co-authored by Alice Example and Bob Example.")
+    resolver.assert_not_called()
+
+
+def search_result(email="alice@example.com", username="Alice-Example"):
+    return {
+        "commit": {"author": {"email": email}},
+        "author": {"login": username},
+    }
+
+
+def mock_search(monkeypatch, result):
+    opener = Mock(return_value=BytesIO(json.dumps(result).encode()))
+    monkeypatch.setattr(changeup_module, "urlopen", opener)
+    return opener
+
+
+def test_coauthor_email_lookup_verifies_email_and_caches_result(plugin, monkeypatch):
+    plugin.link_coauthors = True
+    opener = mock_search(
+        monkeypatch,
+        {
+            "items": [
+                search_result("other@example.com", "other"),
+                search_result("ALICE@example.com", "Alice-Example"),
+            ]
+        },
+    )
+    for email in ["Alice@example.com", "alice@EXAMPLE.com"]:
+        parsed = build_message(plugin, f"Co-authored-by: Alice Example <{email}>")
+        assert parsed["message"].endswith(
+            "Co-authored by [Alice Example](https://github.com/Alice-Example)."
+        )
+    opener.assert_called_once()
+    request = opener.call_args.args[0]
+    assert request.full_url.startswith("https://api.github.com/search/commits?")
+    assert parse_qs(urlsplit(request.full_url).query) == {
+        "q": ["author-email:alice@example.com"],
+        "per_page": ["100"],
+    }
+    assert opener.call_args.kwargs == {"timeout": 2}
+    assert request.get_header("Authorization") is None
+
+
+@pytest.mark.parametrize("token_name", ["GH_TOKEN", "GITHUB_TOKEN"])
+def test_coauthor_lookup_uses_optional_token(monkeypatch, token_name):
+    monkeypatch.setenv(token_name, "test-token")
+    opener = mock_search(monkeypatch, {"items": [search_result()]})
+
+    assert changeup_module._github_username("alice@example.com") == "Alice-Example"
+    assert opener.call_args.args[0].get_header("Authorization") == "Bearer test-token"
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        None,
+        [],
+        {},
+        {"items": None},
+        {"items": []},
+        {"items": [None]},
+        {"items": [{"commit": None, "author": {"login": "alice"}}]},
+        {"items": [{"commit": {"author": None}, "author": {"login": "alice"}}]},
+        {
+            "items": [
+                {"commit": {"author": {"email": "alice@example.com"}}, "author": None}
+            ]
+        },
+        {"items": [search_result("other@example.com")]},
+        {"items": [search_result(username="alice/other")]},
+        {"items": [search_result(), search_result(username="another-account")]},
+        {"items": [search_result()], "incomplete_results": True},
+    ],
+)
+def test_unresolved_coauthor_lookup_keeps_plain_credit(plugin, monkeypatch, result):
+    plugin.link_coauthors = True
+    mock_search(monkeypatch, result)
+    parsed = build_message(plugin, "Co-authored-by: Alice Example <alice@example.com>")
+
+    assert parsed["message"].endswith("Co-authored by Alice Example.")
+    assert "alice@example.com" not in parsed["message"]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        TimeoutError("timeout"),
+        URLError("offline"),
+        IncompleteRead(b"partial"),
+        HTTPError(
+            "https://api.github.com/search/commits", 403, "rate limited", {}, BytesIO()
+        ),
+    ],
+    ids=["timeout", "offline", "incomplete-response", "rate-limit"],
+)
+def test_failed_coauthor_lookup_is_silent_and_cached(
+    plugin, monkeypatch, error, capsys
+):
+    plugin.link_coauthors = True
+    opener = Mock(side_effect=error)
+    monkeypatch.setattr(changeup_module, "urlopen", opener)
+
+    for _ in range(2):
+        parsed = build_message(
+            plugin, "Co-authored-by: Alice Example <alice@example.com>"
+        )
+        assert parsed["message"].endswith("Co-authored by Alice Example.")
+
+    opener.assert_called_once()
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ""
+
+
+def test_malformed_coauthor_lookup_json_keeps_plain_credit(plugin, monkeypatch):
+    plugin.link_coauthors = True
+    monkeypatch.setattr(
+        changeup_module, "urlopen", Mock(return_value=BytesIO(b"not JSON"))
+    )
+    parsed = build_message(plugin, "Co-authored-by: Alice Example <alice@example.com>")
+
+    assert parsed["message"].endswith("Co-authored by Alice Example.")
+
+
+def test_invalid_email_cannot_add_search_qualifiers(plugin):
+    plugin.link_coauthors = True
+    parsed = build_message(
+        plugin, "Co-authored-by: Alice Example <alice@example.com author:other>"
+    )
+
+    assert parsed["message"].endswith("Co-authored by Alice Example.")
+    changeup_module.urlopen.assert_not_called()
+
+
+@pytest.mark.parametrize("breaking", [False, True])
+def test_coauthor_profile_link_renders_without_email(plugin, breaking):
+    plugin.link_coauthors = True
+    body = (
+        "Use the new API.\n\n---------\n\n"
+        "Co-authored-by: Younsik Kim <82874859+Younsik-phys@users.noreply.github.com>"
+    )
+    parsed = (
+        build_message(plugin, "", message=body, change_type="BREAKING CHANGE")
+        if breaking
+        else build_message(plugin, body)
+    )
+    document = render_document(plugin, {"Fix": [parsed]})
+    references = list(document.findall(nodes.reference))
+
+    assert len(references) == 1
+    assert references[0].astext() == "Younsik Kim"
+    assert references[0]["refuri"] == "https://github.com/Younsik-phys"
+    assert "@" not in document.astext()
+    assert not list(document.findall(nodes.transition))

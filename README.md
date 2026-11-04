@@ -37,6 +37,14 @@ trailers become a short credit, such as `Co-authored by Alice Example and Bob
 Example.`, without email addresses. The separator that GitHub adds before these
 trailers is removed.
 
+Coauthor names link to their GitHub profiles when an account can be identified.
+GitHub `noreply` addresses provide the username without a network request. For
+other addresses, the plugin searches public GitHub commits and checks the author
+email. Lookups use a short timeout and are cached for the current process. If a
+lookup fails or does not identify one account, the name stays as plain text. Set
+`GH_TOKEN` or `GITHUB_TOKEN` to authenticate these optional requests. Set
+`changeup_link_coauthors = false` to keep plain names and disable all lookups.
+
 The behavior of the plugin can be customized by providing the following options under `tool.commitizen`:
 
 | Option                          | Description                                                                                                                                      | Default |
@@ -49,6 +57,7 @@ The behavior of the plugin can be customized by providing the following options 
 | `changeup_body_indent`          | The number of spaces to indent the commit body if `changeup_show_body` is set to `true`.                                                         | `2`     |
 | `changeup_link_issues`          | If `true`, tries to convert issue numbers in phrases like `closes #21` to links. Only works if `changeup_repo_base_url` is provided.             | `true`  |
 | `changeup_link_external_issues` | If `true`, tries to convert external issue numbers like `user/repo/#123` to links. Currently only supports github links.                         | `true`  |
+| `changeup_link_coauthors`      | Whether to link coauthor names to GitHub profiles. Disabling this option also disables account lookups.                                      | `true`  |
 | `changeup_scope_prefix`         | Prefix for the scope of the change.                                                                                                              | `"**"`  |
 | `changeup_scope_suffix`         | Suffix for the scope of the change.                                                                                                              | `"**"`  |
 | `changeup_scope_separator`      | Separator between the scope and the message.                                                                                                     | `": "`  |
