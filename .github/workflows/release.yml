@@ -2,12 +2,13 @@ name: Release
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
 env:
   FORCE_COLOR: 1
 
 jobs:
   release:
+    if: ${{ !startsWith(github.event.head_commit.message, 'bump:') }}
     runs-on: ubuntu-latest
     concurrency:
       group: release
@@ -19,36 +20,49 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Run commitizen
-        if: ${{ !startsWith(github.event.head_commit.message, 'bump:') }}
-        id: cz
-        uses: commitizen-tools/commitizen-action@master
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
-          extra_requirements : "."
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          changelog_increment_filename: body.md
+          python-version: "3.15"
+
+      - name: Bump version and update changelog
+        id: cz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cz=(uv tool run --python 3.15 --from 'commitizen>=4,<5' --with . cz)
+          previous_version="$("${cz[@]}" version --project)"
+          "${cz[@]}" --no-raise 21 bump --yes --changelog \
+            --changelog-to-stdout --git-output-to-stderr > body.md
+          version="$("${cz[@]}" version --project)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" != "$previous_version" ]]; then
+            git push --atomic origin "HEAD:${GITHUB_REF_NAME}" "v${version}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build package distributions
-        id: build
-        if: env.REVISION != env.PREVIOUS_REVISION
+        if: steps.cz.outputs.changed == 'true'
         run: |
-          pipx run build
+          uv build --python 3.15
+          uvx --python 3.15 twine check --strict dist/*
 
       - name: Publish package distributions to PyPI
-        id: pypi-publish
-        if: env.REVISION != env.PREVIOUS_REVISION
+        if: steps.cz.outputs.changed == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           verbose: true
 
       - name: Publish package distributions to GitHub Releases
-        id: github-release
-        if: env.REVISION != env.PREVIOUS_REVISION
-        uses: softprops/action-gh-release@v2
+        if: steps.cz.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v3
         with:
           body_path: "body.md"
           tag_name: v${{ steps.cz.outputs.version }}

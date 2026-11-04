@@ -2,7 +2,13 @@ from __future__ import annotations
 
 __all__ = ["ChangeupCz"]
 
+import json
+import os
 import re
+from functools import lru_cache
+from http.client import HTTPException
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from commitizen import config, git
 from commitizen.cz.conventional_commits import ConventionalCommitsCz
@@ -26,13 +32,73 @@ _ISSUE_PATTERN_EXTERNAL = re.compile(
     r"(?P<owner>[\w-]+)/(?P<repo>[\w-]+)/#(?P<issue_number>\d+)"
 )
 _COAUTHOR_TRAILER = re.compile(
-    r"Co-authored-by:[ \t]+(?P<name>[^<>\r\n]+?)[ \t]*<[^<>\r\n]+>[ \t]*",
+    r"Co-authored-by:[ \t]+(?P<name>[^<>\r\n]+?)[ \t]*"
+    r"<(?P<email>[^<>\r\n]+)>[ \t]*",
     re.IGNORECASE,
 )
 _COMMIT_TRAILER = re.compile(r"[A-Za-z][A-Za-z0-9-]*:[ \t]+\S.*")
+_GITHUB_USERNAME = re.compile(r"(?!.*--)[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
+_GITHUB_NOREPLY = re.compile(
+    r"(?:\d+\+)?(?P<username>[A-Za-z0-9-]+)@users\.noreply\.github\.com",
+    re.IGNORECASE,
+)
 
 
-def _split_coauthors(body: str) -> tuple[str, str]:
+def _github_username(email: str) -> str | None:
+    if email.casefold().endswith("@users.noreply.github.com"):
+        match = _GITHUB_NOREPLY.fullmatch(email)
+        if match and _GITHUB_USERNAME.fullmatch(match["username"]):
+            return match["username"]
+        return None
+    return _lookup_github_username(email.casefold())
+
+
+@lru_cache(maxsize=256)
+def _lookup_github_username(email: str) -> str | None:
+    if not re.fullmatch(r'[^@\s<>"\\]+@[^@\s<>"\\]+', email):
+        return None
+    query = urlencode({"q": f"author-email:{email}", "per_page": 100})
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "cz-changeup",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        request = Request(
+            f"https://api.github.com/search/commits?{query}", headers=headers
+        )
+        with urlopen(request, timeout=2) as response:
+            result = json.load(response)
+    except (OSError, ValueError, HTTPException):
+        return None
+    if not isinstance(result, dict) or result.get("incomplete_results"):
+        return None
+    items = result.get("items")
+    if not isinstance(items, list):
+        return None
+    usernames = {}
+    for item in items:
+        if not isinstance(item, dict):
+            return None
+        commit = item.get("commit")
+        author = commit.get("author") if isinstance(commit, dict) else None
+        if not isinstance(author, dict):
+            return None
+        author_email = author.get("email")
+        if not isinstance(author_email, str) or author_email.casefold() != email:
+            continue
+        account = item.get("author")
+        username = account.get("login") if isinstance(account, dict) else None
+        if not isinstance(username, str) or not _GITHUB_USERNAME.fullmatch(username):
+            return None
+        usernames[username.casefold()] = username
+    return next(iter(usernames.values())) if len(usernames) == 1 else None
+
+
+def _split_coauthors(body: str, link_coauthors: bool = True) -> tuple[str, str]:
     lines = body.splitlines()
     end = len(lines)
     names = []
@@ -49,7 +115,14 @@ def _split_coauthors(body: str) -> tuple[str, str]:
                 break
             remaining_lines.append(line)
         else:
-            names.append(trailer["name"].strip())
+            name = trailer["name"].strip()
+            username = (
+                _github_username(trailer["email"].strip()) if link_coauthors else None
+            )
+            if username:
+                label = re.sub(r"([\\\[\]])", r"\\\1", name)
+                name = f"[{label}](https://github.com/{username})"
+            names.append(name)
         end -= 1
 
     if not names:
@@ -147,6 +220,7 @@ class ChangeupCz(ConventionalCommitsCz):
 
     link_issues: bool = conf.settings.get("changeup_link_issues", True)
     link_ext_issues: bool = conf.settings.get("changeup_link_external_issues", True)
+    link_coauthors: bool = conf.settings.get("changeup_link_coauthors", True)
 
     scope_prefix: str = conf.settings.get("changeup_scope_prefix", "")
     scope_suffix: bool = conf.settings.get("changeup_scope_suffix", "")
@@ -165,7 +239,7 @@ class ChangeupCz(ConventionalCommitsCz):
         add_hash: bool = (self.repo_base_url != "") and self.show_hash
 
         if in_breaking_section:
-            description, credit = _split_coauthors(msg)
+            description, credit = _split_coauthors(msg, self.link_coauthors)
             msg = self.parse_body_indent(
                 "\n\n".join(part for part in (description, credit) if part)
             )
@@ -179,7 +253,7 @@ class ChangeupCz(ConventionalCommitsCz):
             )
 
         if self.show_body and commit.body and not in_breaking_section:
-            body, credit = _split_coauthors(str(commit.body))
+            body, credit = _split_coauthors(str(commit.body), self.link_coauthors)
             if self.hide_breaking and "BREAKING CHANGE:" in body:
                 body = body.split("BREAKING CHANGE:")[0].strip()
             body = "\n\n".join(part for part in (body, credit) if part)

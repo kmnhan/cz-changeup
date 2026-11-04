@@ -5,21 +5,37 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+        commitizen: ["commitizen>=4,<5"]
         include:
           - python: "3.9"
             commitizen: "commitizen==3.0.0"
-          - python: "3.14"
-            commitizen: "commitizen>=4,<5"
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: ${{ matrix.python }}
       - run: uv run --with '${{ matrix.commitizen }}' pytest
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.15"
       - run: uv run ruff format --check .
       - run: uv run ruff check .
+      - run: uv build
+      - run: uv tool run --from twine twine check --strict dist/*
+      - name: Test installed wheel
+        run: uv run --no-project --with dist/*.whl --with pytest --with myst-parser pytest
